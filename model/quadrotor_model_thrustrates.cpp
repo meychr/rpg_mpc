@@ -71,12 +71,17 @@ int main( ){
   const double T_min = 2;         // Minimal thrust [N]
   const double T_max = 20;        // Maximal thrust [N]
   const double theta_min = 0.0;
-  const double theta_max = 0.7;  // M_PI/2
-  const double theta_dot_min = -1.0; // change per 1 sec => total change defined by dt => theta_dot_max * dt = delta_theta_max
-  const double theta_dot_max = 1.0;
+  const double theta_max = 1.57;  // M_PI/2
+  const double theta_dot_min = -2.0; // change per 1 sec => total change defined by dt => theta_dot_max * dt = delta_theta_max
+  const double theta_dot_max = 2.0;
 
   // Bias to prevent division by zero.
   const double epsilon = 0.1;     // Camera projection recover bias [m]
+
+  // Proxy function for mlp compensation => optimization exploits it to brake as well!!!
+  const double k_aero = 0.1;
+  IntermediateState resistance_x = v_x * k_aero * ((1.57 - theta_1) + theta_2 + theta_0 + (1.57 - theta_3));
+  IntermediateState resistance_y = v_y * k_aero * (theta_1 + (1.57 - theta_2) + (1.57 - theta_0) + theta_3);
 
   // System Dynamics
   f << dot(p_x) ==  v_x;
@@ -86,8 +91,8 @@ int main( ){
   f << dot(q_x) ==  0.5 * ( w_x * q_w + w_z * q_y - w_y * q_z);
   f << dot(q_y) ==  0.5 * ( w_y * q_w - w_z * q_x + w_x * q_z);
   f << dot(q_z) ==  0.5 * ( w_z * q_w + w_y * q_x - w_x * q_y);
-  f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T;
-  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T;
+  f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T - resistance_x;
+  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T - resistance_y;
   f << dot(v_z) ==  ( 1 - 2 * q_x * q_x - 2 * q_y * q_y ) * T - g_z;
   f << dot(theta_0) == theta_dot_0;
   f << dot(theta_1) == theta_dot_1;
@@ -106,15 +111,13 @@ int main( ){
     << v_x << v_y << v_z
     << intSx/(intSz + epsilon) << intSy/(intSz + epsilon) 
     << T << w_x << w_y << w_z
-    << theta_0 << theta_1 << theta_2 << theta_3
     << theta_dot_0 << theta_dot_1 << theta_dot_2 << theta_dot_3;
 
   // End cost vector consists of all states (no inputs at last state).
   hN << p_x << p_y << p_z
     << q_w << q_x << q_y << q_z
     << v_x << v_y << v_z
-    << intSx/(intSz + epsilon) << intSy/(intSz + epsilon)
-    << theta_0 << theta_1 << theta_2 << theta_3;
+    << intSx/(intSz + epsilon) << intSy/(intSz + epsilon);
 
   // Running cost weight matrix
   DMatrix Q(h.getDim(), h.getDim());
@@ -126,23 +129,26 @@ int main( ){
   Q(4,4) = 100;   // qx
   Q(5,5) = 100;   // qy
   Q(6,6) = 100;   // qz
-  Q(7,7) = 10;   // vx
-  Q(8,8) = 10;   // vy
+  // Increased weights for testing proxy function, otherwise final position dominates => emphasis on breaking not keeping velocity
+  Q(7,7) = 100;   // vx
+  Q(8,8) = 100;   // vy
   Q(9,9) = 10;   // vz
+  // Turn off perception cost => leads to overhead???
   Q(10,10) = 0;  // Cost on perception
   Q(11,11) = 0;  // Cost on perception
   Q(12,12) = 1;   // T
   Q(13,13) = 1;   // wx
   Q(14,14) = 1;   // wy
   Q(15,15) = 1;   // wz
-  Q(16,16) = 10;   // theta_0
-  Q(17,17) = 10;   // theta_1
-  Q(18,18) = 10;   // theta_2
-  Q(19,19) = 10;   // theta_3
-  Q(20,20) = 1;   // theta_0_dot
-  Q(21,21) = 1;   // theta_1_dot
-  Q(22,22) = 1;   // theta_2_dot
-  Q(23,23) = 1;   // theta_3_dot
+  Q(16,16) = 0.1;   // theta_dot_0
+  Q(17,17) = 0.1;   // theta_dot_1
+  Q(18,18) = 0.1;   // theta_dot_2
+  Q(19,19) = 0.1;   // theta_dot_3
+  // Use optionally to set desired standard config with low weights
+//  Q(20,20) = 1;   // theta_0_dot
+//  Q(21,21) = 1;   // theta_1_dot
+//  Q(22,22) = 1;   // theta_2_dot
+//  Q(23,23) = 1;   // theta_3_dot
 
   // End cost weight matrix
   DMatrix QN(hN.getDim(), hN.getDim());
@@ -157,33 +163,33 @@ int main( ){
   QN(7,7) = Q(7,7);   // vx
   QN(8,8) = Q(8,8);   // vy
   QN(9,9) = Q(9,9);   // vz
+  // Turn off perception cost => leads to overhead???
   QN(10,10) = 0;  // Cost on perception
   QN(11,11) = 0;  // Cost on perception
-  Q(12,12) = 10;   // theta_0
-  Q(13,13) = 10;   // theta_1
-  Q(14,14) = 10;   // theta_2
-  Q(15,15) = 10;   // theta_3
+  // Use optionally to set desired standard config with low weights
+//  Q(12,12) = 10;   // theta_0
+//  Q(13,13) = 10;   // theta_1
+//  Q(14,14) = 10;   // theta_2
+//  Q(15,15) = 10;   // theta_3
 
   // Set a reference for the analysis (if CODE_GEN is false).
   // Reference is at x = 2.0m in hover (qw = 1).
   DVector r(h.getDim());    // Running cost reference
   r.setZero();
-  r(0) = 2.0;
-  r(3) = 1.0;
+  r(0) = 0.0; // px
+  r(1) = 2.0; // py
+  r(3) = 1.0; // qw
+  r(7) = 0.0; // vx
+  r(8) = 2.5; // vy
   r(10) = g_z;
-  r(16) = 0.785;
-  r(17) = 0.785;
-  r(18) = 0.785;
-  r(19) = 0.785;
 
   DVector rN(hN.getDim());   // End cost reference
   rN.setZero();
-  rN(0) = r(0);
-  rN(3) = r(3);
-  r(12) = 0.785;
-  r(13) = 0.785;
-  r(14) = 0.785;
-  r(15) = 0.785;
+  rN(0) = r(0); // px
+  rN(3) = r(3); // py
+  r(7) = 0.0; // vx
+  r(8) = 2.5; // vy
+  r(10) = g_z;
 
   // DEFINE AN OPTIMAL CONTROL PROBLEM:
   // ----------------------------------
@@ -250,12 +256,17 @@ int main( ){
 
     // Setup some visualization
     GnuplotWindow window1( PLOT_AT_END );
-    window1.addSubplot( p_x,"position x" );
-    window1.addSubplot( p_y,"position y" );
-    window1.addSubplot( p_z,"position z" );
-    window1.addSubplot( v_x,"verlocity x" );
-    window1.addSubplot( v_y,"verlocity y" );
-    window1.addSubplot( v_z,"verlocity z" );
+//    window1.addSubplot( p_x,"position x" );
+//    window1.addSubplot( p_y,"position y" );
+//    window1.addSubplot( p_z,"position z" );
+    window1.addSubplot( v_x,"velocity x" );
+    window1.addSubplot( v_y,"velocity y" );
+    window1.addSubplot( v_z,"velocity z" );
+    // causes problems with plotting
+    window1.addSubplot( theta_0 * 180.0 / 3.141,"theta 0" );
+    window1.addSubplot( theta_1 * 180.0 / 3.141,"theta 1" );
+    window1.addSubplot( theta_2 * 180.0 / 3.141,"theta 2" );
+    window1.addSubplot( theta_3 * 180.0 / 3.141,"theta 3" );
 
     GnuplotWindow window2( PLOT_AT_END);
     window2.addSubplot( w_x,"rotation-acc x" );
@@ -281,10 +292,8 @@ int main( ){
     algorithm.set( KKT_TOLERANCE, 1e-3 );
 
     // Not possible to use more than two windows???
-    //algorithm << window1;
-    //algorithm << window2;
-    algorithm << window3;
-    algorithm << window4;
+    algorithm << window1;
+    //algorithm << window4;
 
     algorithm.solve();
 
