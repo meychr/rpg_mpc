@@ -262,7 +262,7 @@ int main( ){
     window1.addSubplot( v_x,"velocity x" );
     window1.addSubplot( v_y,"velocity y" );
     window1.addSubplot( v_z,"velocity z" );
-    // causes problems with plotting
+    // radians to degrees causes problems with plotting
     window1.addSubplot( theta_0 * 180.0 / 3.141,"theta 0" );
     window1.addSubplot( theta_1 * 180.0 / 3.141,"theta 1" );
     window1.addSubplot( theta_2 * 180.0 / 3.141,"theta 2" );
