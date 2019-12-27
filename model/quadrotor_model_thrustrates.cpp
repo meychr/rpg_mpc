@@ -45,13 +45,15 @@ int main( ){
   If CODE_GEN is false, the system is compiled into a standalone optimization
   and solved on execution. The reference and constraints must be set in here.
   */
-  const bool CODE_GEN = true;
+  const bool CODE_GEN = false;
 
   // System variables
   DifferentialState     p_x, p_y, p_z;
   DifferentialState     q_w, q_x, q_y, q_z;
   DifferentialState     v_x, v_y, v_z;
+  DifferentialState     theta_0, theta_1, theta_2, theta_3;         // rotor arm servo angles
   Control               T, w_x, w_y, w_z;
+  Control               theta_dot_0, theta_dot_1, theta_dot_2, theta_dot_3;
   DifferentialEquation  f;
   Function              h, hN;
   OnlineData            p_F_x, p_F_y, p_F_z;
@@ -68,10 +70,13 @@ int main( ){
   const double w_max_xy = 3;      // Maximal pitch and roll rate [rad/s]
   const double T_min = 2;         // Minimal thrust [N]
   const double T_max = 20;        // Maximal thrust [N]
+  const double theta_min = 0.0;
+  const double theta_max = 0.7;  // M_PI/2
+  const double theta_dot_min = -1.0; // change per 1 sec => total change defined by dt => theta_dot_max * dt = delta_theta_max
+  const double theta_dot_max = 1.0;
 
   // Bias to prevent division by zero.
   const double epsilon = 0.1;     // Camera projection recover bias [m]
-
 
   // System Dynamics
   f << dot(p_x) ==  v_x;
@@ -84,6 +89,10 @@ int main( ){
   f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T;
   f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T;
   f << dot(v_z) ==  ( 1 - 2 * q_x * q_x - 2 * q_y * q_y ) * T - g_z;
+  f << dot(theta_0) == theta_dot_0;
+  f << dot(theta_1) == theta_dot_1;
+  f << dot(theta_2) == theta_dot_2;
+  f << dot(theta_3) == theta_dot_3;
 
   // Intermediate states to calculate point of interest projection!
   IntermediateState intSx = ((((-q_x)*q_B_C_x+(-q_y)*q_B_C_y+(-q_z)*q_B_C_z+q_B_C_w*q_w)*((-q_x)*q_B_C_x+(-q_y)*q_B_C_y+(-q_z)*q_B_C_z+q_B_C_w*q_w)+((-q_x)*q_B_C_z+q_B_C_w*q_y+q_B_C_x*q_z+q_B_C_y*q_w)*(-(-q_x)*q_B_C_z-q_B_C_w*q_y-q_B_C_x*q_z-q_B_C_y*q_w)+((-q_y)*q_B_C_x+q_B_C_w*q_z+q_B_C_y*q_x+q_B_C_z*q_w)*(-(-q_y)*q_B_C_x-q_B_C_w*q_z-q_B_C_y*q_x-q_B_C_z*q_w)+((-q_z)*q_B_C_y+q_B_C_w*q_x+q_B_C_x*q_w+q_B_C_z*q_y)*((-q_z)*q_B_C_y+q_B_C_w*q_x+q_B_C_x*q_w+q_B_C_z*q_y))*(p_F_x-p_x)+(((-q_x)*q_B_C_x+(-q_y)*q_B_C_y+(-q_z)*q_B_C_z+q_B_C_w*q_w)*((-q_y)*q_B_C_x+q_B_C_w*q_z+q_B_C_y*q_x+q_B_C_z*q_w)+((-q_x)*q_B_C_x+(-q_y)*q_B_C_y+(-q_z)*q_B_C_z+q_B_C_w*q_w)*((-q_y)*q_B_C_x+q_B_C_w*q_z+q_B_C_y*q_x+q_B_C_z*q_w)+((-q_x)*q_B_C_z+q_B_C_w*q_y+q_B_C_x*q_z+q_B_C_y*q_w)*((-q_z)*q_B_C_y+q_B_C_w*q_x+q_B_C_x*q_w+q_B_C_z*q_y)+(-(-q_x)*q_B_C_z-q_B_C_w*q_y-q_B_C_x*q_z-q_B_C_y*q_w)*(-(-q_z)*q_B_C_y-q_B_C_w*q_x-q_B_C_x*q_w-q_B_C_z*q_y))*(p_F_y-p_y)+(((-q_x)*q_B_C_x+(-q_y)*q_B_C_y+(-q_z)*q_B_C_z+q_B_C_w*q_w)*(-(-q_x)*q_B_C_z-q_B_C_w*q_y-q_B_C_x*q_z-q_B_C_y*q_w)+((-q_x)*q_B_C_x+(-q_y)*q_B_C_y+(-q_z)*q_B_C_z+q_B_C_w*q_w)*(-(-q_x)*q_B_C_z-q_B_C_w*q_y-q_B_C_x*q_z-q_B_C_y*q_w)+((-q_y)*q_B_C_x+q_B_C_w*q_z+q_B_C_y*q_x+q_B_C_z*q_w)*((-q_z)*q_B_C_y+q_B_C_w*q_x+q_B_C_x*q_w+q_B_C_z*q_y)+((-q_y)*q_B_C_x+q_B_C_w*q_z+q_B_C_y*q_x+q_B_C_z*q_w)*((-q_z)*q_B_C_y+q_B_C_w*q_x+q_B_C_x*q_w+q_B_C_z*q_y))*(p_F_z-p_z));
@@ -96,13 +105,16 @@ int main( ){
     << q_w << q_x << q_y << q_z
     << v_x << v_y << v_z
     << intSx/(intSz + epsilon) << intSy/(intSz + epsilon) 
-    << T << w_x << w_y << w_z;
+    << T << w_x << w_y << w_z
+    << theta_0 << theta_1 << theta_2 << theta_3
+    << theta_dot_0 << theta_dot_1 << theta_dot_2 << theta_dot_3;
 
   // End cost vector consists of all states (no inputs at last state).
   hN << p_x << p_y << p_z
     << q_w << q_x << q_y << q_z
     << v_x << v_y << v_z
-    << intSx/(intSz + epsilon) << intSy/(intSz + epsilon);
+    << intSx/(intSz + epsilon) << intSy/(intSz + epsilon)
+    << theta_0 << theta_1 << theta_2 << theta_3;
 
   // Running cost weight matrix
   DMatrix Q(h.getDim(), h.getDim());
@@ -123,6 +135,14 @@ int main( ){
   Q(13,13) = 1;   // wx
   Q(14,14) = 1;   // wy
   Q(15,15) = 1;   // wz
+  Q(16,16) = 10;   // theta_0
+  Q(17,17) = 10;   // theta_1
+  Q(18,18) = 10;   // theta_2
+  Q(19,19) = 10;   // theta_3
+  Q(20,20) = 1;   // theta_0_dot
+  Q(21,21) = 1;   // theta_1_dot
+  Q(22,22) = 1;   // theta_2_dot
+  Q(23,23) = 1;   // theta_3_dot
 
   // End cost weight matrix
   DMatrix QN(hN.getDim(), hN.getDim());
@@ -139,6 +159,10 @@ int main( ){
   QN(9,9) = Q(9,9);   // vz
   QN(10,10) = 0;  // Cost on perception
   QN(11,11) = 0;  // Cost on perception
+  Q(12,12) = 10;   // theta_0
+  Q(13,13) = 10;   // theta_1
+  Q(14,14) = 10;   // theta_2
+  Q(15,15) = 10;   // theta_3
 
   // Set a reference for the analysis (if CODE_GEN is false).
   // Reference is at x = 2.0m in hover (qw = 1).
@@ -147,12 +171,19 @@ int main( ){
   r(0) = 2.0;
   r(3) = 1.0;
   r(10) = g_z;
+  r(16) = 0.785;
+  r(17) = 0.785;
+  r(18) = 0.785;
+  r(19) = 0.785;
 
   DVector rN(hN.getDim());   // End cost reference
   rN.setZero();
   rN(0) = r(0);
   rN(3) = r(3);
-
+  r(12) = 0.785;
+  r(13) = 0.785;
+  r(14) = 0.785;
+  r(15) = 0.785;
 
   // DEFINE AN OPTIMAL CONTROL PROBLEM:
   // ----------------------------------
@@ -179,9 +210,17 @@ int main( ){
   ocp.subjectTo(-w_max_xy <= w_y <= w_max_xy);
   ocp.subjectTo(-w_max_yaw <= w_z <= w_max_yaw);
   ocp.subjectTo( T_min <= T <= T_max);
+  ocp.subjectTo( theta_min <= theta_0 <= theta_max);
+  ocp.subjectTo( theta_min <= theta_1 <= theta_max);
+  ocp.subjectTo( theta_min <= theta_2 <= theta_max);
+  ocp.subjectTo( theta_min <= theta_3 <= theta_max);
+  ocp.subjectTo( theta_dot_min <= theta_dot_0 <= theta_dot_max);
+  ocp.subjectTo( theta_dot_min <= theta_dot_1 <= theta_dot_max);
+  ocp.subjectTo( theta_dot_min <= theta_dot_2 <= theta_dot_max);
+  ocp.subjectTo( theta_dot_min <= theta_dot_3 <= theta_dot_max);
 
+  // number of online data
   ocp.setNOD(10);
-
 
   if(!CODE_GEN)
   {
@@ -200,8 +239,17 @@ int main( ){
     ocp.subjectTo( AT_START, w_y ==  0.0 );
     ocp.subjectTo( AT_START, w_z ==  0.0 );
 
+    ocp.subjectTo( AT_START, theta_0 ==  0.0 );
+    ocp.subjectTo( AT_START, theta_1 ==  0.0 );
+    ocp.subjectTo( AT_START, theta_2 ==  0.0 );
+    ocp.subjectTo( AT_START, theta_3 ==  0.0 );
+    ocp.subjectTo( AT_START, theta_dot_0 ==  0.0 );
+    ocp.subjectTo( AT_START, theta_dot_1 ==  0.0 );
+    ocp.subjectTo( AT_START, theta_dot_2 ==  0.0 );
+    ocp.subjectTo( AT_START, theta_dot_3 ==  0.0 );
+
     // Setup some visualization
-    GnuplotWindow window1( PLOT_AT_EACH_ITERATION );
+    GnuplotWindow window1( PLOT_AT_END );
     window1.addSubplot( p_x,"position x" );
     window1.addSubplot( p_y,"position y" );
     window1.addSubplot( p_z,"position z" );
@@ -209,19 +257,35 @@ int main( ){
     window1.addSubplot( v_y,"verlocity y" );
     window1.addSubplot( v_z,"verlocity z" );
 
-    GnuplotWindow window3( PLOT_AT_EACH_ITERATION );
-    window3.addSubplot( w_x,"rotation-acc x" );
-    window3.addSubplot( w_y,"rotation-acc y" );
-    window3.addSubplot( w_z,"rotation-acc z" ); 
-    window3.addSubplot( T,"Thrust" );
+    GnuplotWindow window2( PLOT_AT_END);
+    window2.addSubplot( w_x,"rotation-acc x" );
+    window2.addSubplot( w_y,"rotation-acc y" );
+    window2.addSubplot( w_z,"rotation-acc z" );
+    window2.addSubplot( T,"Thrust" );
 
+    GnuplotWindow window3( PLOT_AT_END );
+    window3.addSubplot( theta_0,"theta 0" );
+    window3.addSubplot( theta_1,"theta 1" );
+    window3.addSubplot( theta_2,"theta 2" );
+    window3.addSubplot( theta_3,"theta 3" );
+
+    GnuplotWindow window4( PLOT_AT_END );
+    window4.addSubplot( theta_dot_0,"theta dot 0" );
+    window4.addSubplot( theta_dot_1,"theta dot 1" );
+    window4.addSubplot( theta_dot_2,"theta dot 2" );
+    window4.addSubplot( theta_dot_3,"theta dot 3" );
 
     // Define an algorithm to solve it.
     OptimizationAlgorithm algorithm(ocp);
     algorithm.set( INTEGRATOR_TOLERANCE, 1e-6 );
     algorithm.set( KKT_TOLERANCE, 1e-3 );
-    algorithm << window1;
+
+    // Not possible to use more than two windows???
+    //algorithm << window1;
+    //algorithm << window2;
     algorithm << window3;
+    algorithm << window4;
+
     algorithm.solve();
 
   }else{
