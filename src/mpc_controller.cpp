@@ -50,6 +50,8 @@ MpcController<T>::MpcController(
                                          &MpcController<T>::pointOfInterestCallback, this);
   sub_autopilot_off_ = nh_.subscribe("autopilot/off", 1,
                                      &MpcController<T>::offCallback, this);
+  sub_servo_angles_ = nh_.subscribe("servo_goal_command", 1,
+                                         &MpcController<T>::servoAnglesCallback, this);
 
   if (!params_.loadParameters(pnh_)) {
     ROS_ERROR("[%s] Could not load parameters.", pnh_.getNamespace().c_str());
@@ -69,6 +71,15 @@ void MpcController<T>::pointOfInterestCallback(
   point_of_interest_(1) = msg->point.y;
   point_of_interest_(2) = msg->point.z;
   mpc_wrapper_.setPointOfInterest(point_of_interest_);
+}
+
+template<typename T>
+void MpcController<T>::servoAnglesCallback(
+    const foldable_drone_msgs::FoldableDroneServoAngles::ConstPtr& msg){
+  servo_angles_(0) = msg->angle_servo_0;
+  servo_angles_(1) = msg->angle_servo_1;
+  servo_angles_(2) = msg->angle_servo_2;
+  servo_angles_(3) = msg->angle_servo_3;
 }
 
 template<typename T>
@@ -151,6 +162,10 @@ bool MpcController<T>::setStateEstimate(
   est_state_(kVelX) = state_estimate.velocity.x();
   est_state_(kVelY) = state_estimate.velocity.y();
   est_state_(kVelZ) = state_estimate.velocity.z();
+  est_state_(kServo0) = servo_angles_(0);
+  est_state_(kServo1) = servo_angles_(1);
+  est_state_(kServo2) = servo_angles_(2);
+  est_state_(kServo3) = servo_angles_(3);
   const bool quaternion_norm_ok = abs(est_state_.segment(kOriW, 4).norm() - 1.0) < 0.1;
   return quaternion_norm_ok;
 }

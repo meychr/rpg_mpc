@@ -38,6 +38,7 @@
 #include <std_msgs/Bool.h>
 #include <std_msgs/Empty.h>
 #include <trajectory_msgs/MultiDOFJointTrajectory.h>
+#include <foldable_drone_msgs/FoldableDroneServoAngles.h>
 
 #include "rpg_mpc/mpc_wrapper.h"
 #include "rpg_mpc/mpc_params.h"
@@ -54,14 +55,22 @@ enum STATE {
   kOriZ = 6,
   kVelX = 7,
   kVelY = 8,
-  kVelZ = 9
+  kVelZ = 9,
+  kServo0 = 10,
+  kServo1 = 11,
+  kServo2 = 12,
+  kServo3 = 13
 };
 
 enum INPUT {
   kThrust = 0,
   kRateX = 1,
   kRateY = 2,
-  kRateZ = 3
+  kRateZ = 3,
+  kRateServo0 = 4,
+  kRateServo1 = 5,
+  kRateServo2 = 6,
+  kRateServo3 = 7
 };
 
 template<typename T>
@@ -70,9 +79,9 @@ public:
 
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
-  static_assert(kStateSize == 10,
+  static_assert(kStateSize == 14,
                 "MpcController: Wrong model size. Number of states does not match.");
-  static_assert(kInputSize == 4,
+  static_assert(kInputSize == 8,
                 "MpcController: Wrong model size. Number of inputs does not match.");
 
   MpcController(const ros::NodeHandle& nh,
@@ -94,6 +103,9 @@ private:
 
   void pointOfInterestCallback(
       const geometry_msgs::PointStamped::ConstPtr& msg);
+
+  void servoAnglesCallback(
+      const foldable_drone_msgs::FoldableDroneServoAngles::ConstPtr& msg);
 
   void offCallback(const std_msgs::Empty::ConstPtr& msg);
 
@@ -123,6 +135,7 @@ private:
   // Subscribers and publisher.
   ros::Subscriber sub_point_of_interest_;
   ros::Subscriber sub_autopilot_off_;
+  ros::Subscriber sub_servo_angles_;
   ros::Publisher pub_predicted_trajectory_;
 
   // Parameters
@@ -143,6 +156,7 @@ private:
   Eigen::Matrix<T, kStateSize, kSamples + 1> predicted_states_;
   Eigen::Matrix<T, kInputSize, kSamples> predicted_inputs_;
   Eigen::Matrix<T, 3, 1> point_of_interest_;
+  Eigen::Matrix<T, 4, 1> servo_angles_;
 };
 
 
