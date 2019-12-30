@@ -99,6 +99,7 @@ MpcWrapper<T>::MpcWrapper(
 }
 
 // Set cost matrices with optional scaling.
+// TODO check dimensions of Q and R
 template <typename T>
 bool MpcWrapper<T>::setCosts(
   const Eigen::Ref<const Eigen::Matrix<T, kCostSize, kCostSize>> Q,

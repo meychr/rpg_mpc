@@ -47,6 +47,10 @@ class MpcParams {
     max_bodyrate_z_(0.0),
     min_thrust_(0.0),
     max_thrust_(0.0),
+    // TODO add to loadParameters()
+    max_servo_angle_rate_(2.0),
+    min_servo_angle_(0.0),
+    max_servo_angle_(1.57),
     p_B_C_(Eigen::Matrix<T, 3, 1>::Zero()),
     q_B_C_(Eigen::Quaternion<T>(1.0, 0.0, 0.0, 0.0)),
     Q_(Eigen::Matrix<T, kCostSize, kCostSize>::Zero()),
@@ -103,13 +107,14 @@ class MpcParams {
     }
 
     // Set state and input cost matrices.
+    // TODO adapt for servo angles
     Q_ = (Eigen::Matrix<T, kCostSize, 1>() <<
       Q_pos_xy, Q_pos_xy, Q_pos_z,
       Q_attitude, Q_attitude, Q_attitude, Q_attitude,
       Q_velocity, Q_velocity, Q_velocity,
       Q_perception, Q_perception).finished().asDiagonal();
     R_ = (Eigen::Matrix<T, kInputSize, 1>() <<
-      R_thrust, R_pitchroll, R_pitchroll, R_yaw).finished().asDiagonal();
+      R_thrust, R_pitchroll, R_pitchroll, R_yaw, 0.1, 0.1, 0.1, 0.1).finished().asDiagonal();
 
     // Read cost scaling values
     quadrotor_common::getParam("state_cost_exponential",
@@ -176,6 +181,9 @@ class MpcParams {
   T max_bodyrate_z_;
   T min_thrust_;
   T max_thrust_;
+  T max_servo_angle_rate_;
+  T min_servo_angle_;
+  T max_servo_angle_;
 
   Eigen::Matrix<T, 3, 1> p_B_C_;
   Eigen::Quaternion<T> q_B_C_;

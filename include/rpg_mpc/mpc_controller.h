@@ -137,6 +137,7 @@ private:
   ros::Subscriber sub_autopilot_off_;
   ros::Subscriber sub_servo_angles_;
   ros::Publisher pub_predicted_trajectory_;
+  ros::Publisher pub_servo_angle_cmd_;
 
   // Parameters
   MpcParams<T> params_;

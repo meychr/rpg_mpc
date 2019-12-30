@@ -36,8 +36,9 @@ MpcController<T>::MpcController(
     mpc_wrapper_(MpcWrapper<T>()),
     timing_feedback_(T(1e-3)),
     timing_preparation_(T(1e-3)),
+    // TODO check if correct for servo angles
     est_state_((Eigen::Matrix<T, kStateSize, 1>() <<
-                                                  0, 0, 0, 1, 0, 0, 0, 0, 0, 0).finished()),
+                                                  0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0.785, 0.785, 0.785, 0.785).finished()),
     reference_states_(Eigen::Matrix<T, kStateSize, kSamples + 1>::Zero()),
     reference_inputs_(Eigen::Matrix<T, kInputSize, kSamples + 1>::Zero()),
     predicted_states_(Eigen::Matrix<T, kStateSize, kSamples + 1>::Zero()),
@@ -52,6 +53,7 @@ MpcController<T>::MpcController(
                                      &MpcController<T>::offCallback, this);
   sub_servo_angles_ = nh_.subscribe("servo_goal_command", 1,
                                          &MpcController<T>::servoAnglesCallback, this);
+  pub_servo_angle_cmd_ =  nh_.advertise<foldable_drone_msgs::FoldableDroneServoAngles>("set_servo", 1);
 
   if (!params_.loadParameters(pnh_)) {
     ROS_ERROR("[%s] Could not load parameters.", pnh_.getNamespace().c_str());
@@ -118,6 +120,7 @@ quadrotor_common::ControlCommand MpcController<T>::run(
   static const bool do_preparation_step(false);
 
   // Get the feedback from MPC.
+  // reference values are the ones used to define the desired state => (x - x_reference), can be left at zero for servo angles of foldable_drone
   mpc_wrapper_.setTrajectory(reference_states_, reference_inputs_);
   if (solve_from_scratch_) {
     ROS_INFO("Solving MPC with hover as initial guess.");
@@ -130,6 +133,7 @@ quadrotor_common::ControlCommand MpcController<T>::run(
   mpc_wrapper_.getInputs(predicted_inputs_);
 
   // Publish the predicted trajectory.
+  // TODO Does not publish predicted servo angles
   publishPrediction(predicted_states_, predicted_inputs_, call_time);
 
   // Start a thread to prepare for the next execution.
@@ -193,12 +197,14 @@ bool MpcController<T>::setReference(
         q_orientation.x(),
         q_orientation.y(),
         q_orientation.z(),
-        reference_trajectory.points.front().velocity.template cast<T>()
+        reference_trajectory.points.front().velocity.template cast<T>(),
+          0.0, 0.0, 0.0, 0.0  // servo angles
     ).finished().replicate(1, kSamples + 1);
 
     acceleration << reference_trajectory.points.front().acceleration.template cast<T>() - gravity;
     reference_inputs_ = (Eigen::Matrix<T, kInputSize, 1>() << acceleration.norm(),
-        reference_trajectory.points.front().bodyrates.template cast<T>()
+        reference_trajectory.points.front().bodyrates.template cast<T>(),
+          0.0, 0.0, 0.0, 0.0 // servo angle rate
     ).finished().replicate(1, kSamples + 1);
   } else {
     auto iterator(reference_trajectory.points.begin());
@@ -220,14 +226,16 @@ bool MpcController<T>::setReference(
           q_orientation.x(),
           q_orientation.y(),
           q_orientation.z(),
-          iterator->velocity.template cast<T>();
+          iterator->velocity.template cast<T>(),
+            0.0, 0.0, 0.0, 0.0;
       if (reference_states_.col(i).segment(kOriW, 4).dot(
           est_state_.segment(kOriW, 4)) < 0.0)
         reference_states_.block(kOriW, i, 4, 1) =
             -reference_states_.block(kOriW, i, 4, 1);
       acceleration << iterator->acceleration.template cast<T>() - gravity;
       reference_inputs_.col(i) << acceleration.norm(),
-          iterator->bodyrates.template cast<T>();
+          iterator->bodyrates.template cast<T>(),
+            0.0, 0.0, 0.0, 0.0;
       quaternion_norm_ok &= abs(est_state_.segment(kOriW, 4).norm() - 1.0) < 0.1;
     }
   }
@@ -250,6 +258,24 @@ quadrotor_common::ControlCommand MpcController<T>::updateControlCommand(
                                           std::min(params_.max_bodyrate_xy_, input_bounded(INPUT::kRateY)));
   input_bounded(INPUT::kRateZ) = std::max(-params_.max_bodyrate_z_,
                                           std::min(params_.max_bodyrate_z_, input_bounded(INPUT::kRateZ)));
+  input_bounded(INPUT::kRateServo0) = std::max(-params_.max_servo_angle_rate_,
+                                          std::min(params_.max_servo_angle_rate_, input_bounded(INPUT::kRateServo0)));
+  input_bounded(INPUT::kRateServo1) = std::max(-params_.max_servo_angle_rate_,
+                                          std::min(params_.max_servo_angle_rate_, input_bounded(INPUT::kRateServo1)));
+  input_bounded(INPUT::kRateServo2) = std::max(-params_.max_servo_angle_rate_,
+                                          std::min(params_.max_servo_angle_rate_, input_bounded(INPUT::kRateServo2)));
+  input_bounded(INPUT::kRateServo3) = std::max(-params_.max_servo_angle_rate_,
+                                          std::min(params_.max_servo_angle_rate_, input_bounded(INPUT::kRateServo3)));
+
+  const T dt_mpc = mpc_wrapper_.getTimestep();  // in secs
+  foldable_drone_msgs::FoldableDroneServoAngles servo_angle_command;
+  servo_angle_command.header.stamp = time;
+  servo_angle_command.angle_servo_0 = state(STATE::kServo0) + input_bounded(INPUT::kRateServo0) * dt_mpc;
+  servo_angle_command.angle_servo_1 = state(STATE::kServo1) + input_bounded(INPUT::kRateServo1) * dt_mpc;
+  servo_angle_command.angle_servo_2 = state(STATE::kServo2) + input_bounded(INPUT::kRateServo2) * dt_mpc;
+  servo_angle_command.angle_servo_3 = state(STATE::kServo3) + input_bounded(INPUT::kRateServo3) * dt_mpc;
+
+  pub_servo_angle_cmd_.publish(servo_angle_command);
 
   quadrotor_common::ControlCommand command;
 

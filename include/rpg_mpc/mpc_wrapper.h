@@ -52,10 +52,11 @@ class MpcWrapper
   EIGEN_MAKE_ALIGNED_OPERATOR_NEW
 
   MpcWrapper();
+  // TODO check dimensions of Q and R
   MpcWrapper(
     const Eigen::Ref<const Eigen::Matrix<T, kCostSize, kCostSize>> Q,
     const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kInputSize>> R);
-
+  // TODO check dimensions of Q and R
   bool setCosts(
     const Eigen::Ref<const Eigen::Matrix<T, kCostSize, kCostSize>> Q,
     const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kInputSize>> R,
@@ -126,7 +127,8 @@ class MpcWrapper
     100 * Eigen::Matrix<T, 4, 1>::Ones(),
     10 * Eigen::Matrix<T, 3, 1>::Ones(),
     Eigen::Matrix<T, 2, 1>::Zero(),
-    1, 10, 10, 1).finished().asDiagonal();
+    1, 10, 10, 1,
+    0.1, 0.1, 0.1, 0.1).finished().asDiagonal();
 
   Eigen::Matrix<T, kEndRefSize, kEndRefSize> WN_ =
     W_.block(0, 0, kEndRefSize, kEndRefSize);
@@ -134,7 +136,7 @@ class MpcWrapper
   bool acado_is_prepared_{false};
   const T dt_{0.1};
   const Eigen::Matrix<real_t, kInputSize, 1> kHoverInput_ =
-    (Eigen::Matrix<real_t, kInputSize, 1>() << 9.81, 0.0, 0.0, 0.0).finished();
+    (Eigen::Matrix<real_t, kInputSize, 1>() << 9.81, 0.0, 0.0, 0.0, 0.785, 0.785, 0.785, 0.785).finished();
 };
 
 
