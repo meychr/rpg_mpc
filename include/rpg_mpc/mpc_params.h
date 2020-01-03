@@ -92,15 +92,17 @@ class MpcParams {
     }
 
     // Read input costs.
-    T R_thrust, R_pitchroll, R_yaw;
+    T R_thrust, R_pitchroll, R_yaw, R_servo_angle_rate;
     GET_PARAM(R_thrust);
     GET_PARAM(R_pitchroll);
     GET_PARAM(R_yaw);
+    GET_PARAM(R_servo_angle_rate);
 
     // Check whether all input costs are positive.
-    if(R_thrust    <= 0.0 ||
-       R_pitchroll <= 0.0 ||
-       R_yaw       <= 0.0)
+    if(R_thrust           <= 0.0 ||
+       R_pitchroll        <= 0.0 ||
+       R_yaw              <= 0.0 ||
+       R_servo_angle_rate <= 0.0)
     {
       ROS_ERROR("MPC: Input cost R has negative enries!");
       return false;
@@ -114,7 +116,8 @@ class MpcParams {
       Q_velocity, Q_velocity, Q_velocity,
       Q_perception, Q_perception).finished().asDiagonal();
     R_ = (Eigen::Matrix<T, kInputSize, 1>() <<
-      R_thrust, R_pitchroll, R_pitchroll, R_yaw, 0.1, 0.1, 0.1, 0.1).finished().asDiagonal();
+      R_thrust, R_pitchroll, R_pitchroll, R_yaw,
+      R_servo_angle_rate, R_servo_angle_rate, R_servo_angle_rate, R_servo_angle_rate).finished().asDiagonal();
 
     // Read cost scaling values
     quadrotor_common::getParam("state_cost_exponential",
@@ -127,14 +130,29 @@ class MpcParams {
     GET_PARAM_(max_bodyrate_z);
     GET_PARAM_(min_thrust);
     GET_PARAM_(max_thrust);
+    GET_PARAM_(min_servo_angle);
+    GET_PARAM_(max_servo_angle);
+    GET_PARAM_(max_servo_angle_rate);
 
-    // Check whether all input limits are positive.
+
+    // Check whether all input limits are positive. No check on servo angles
     if(max_bodyrate_xy_ <= 0.0 ||
        max_bodyrate_z_  <= 0.0 ||
        min_thrust_      <= 0.0 ||
-       max_thrust_      <= 0.0)
+       max_thrust_      <= 0.0 ||
+       max_servo_angle_rate_ <= 0.0)
     {
       ROS_ERROR("MPC: All limits must be positive non-zero values!");
+      return false;
+    }
+
+    // Check whether all input limits are positive. No check on servo angles
+    if(min_servo_angle_ <= -M_PI/2.0 ||
+       max_servo_angle_ >= M_PI ||
+       min_servo_angle_ >= max_servo_angle_)
+    {
+      ROS_ERROR("MPC: Minimal and maximal servo angles have to lie between -pi/2 and pi! "
+                "Maximal value has to be larger than minimal value");
       return false;
     }
 
