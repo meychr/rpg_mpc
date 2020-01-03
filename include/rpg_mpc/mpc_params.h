@@ -48,9 +48,9 @@ class MpcParams {
     min_thrust_(0.0),
     max_thrust_(0.0),
     // TODO add to loadParameters()
-    max_servo_angle_rate_(200.0),
+    max_servo_angle_rate_(0.0),
     min_servo_angle_(0.0),
-    max_servo_angle_(1.57),
+    max_servo_angle_(0.0),
     p_B_C_(Eigen::Matrix<T, 3, 1>::Zero()),
     q_B_C_(Eigen::Quaternion<T>(1.0, 0.0, 0.0, 0.0)),
     Q_(Eigen::Matrix<T, kCostSize, kCostSize>::Zero()),
