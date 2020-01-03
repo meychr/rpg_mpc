@@ -39,10 +39,13 @@ MpcWrapper<T>::MpcWrapper()
   acado_initializeSolver();
 
   // Initialize the states and controls.
+  // TODO adapt for foldable drone, check if states for servo angles required
   const Eigen::Matrix<T, kStateSize, 1> hover_state =
-    (Eigen::Matrix<T, kStateSize, 1>() << 0.0, 0.0, 0.0,
-                                          1.0, 0.0, 0.0, 0.0,
-                                          0.0, 0.0, 0.0).finished();
+    (Eigen::Matrix<T, kStateSize, 1>() << 0.0, 0.0, 0.0,        // position: x, y, z
+                                          1.0, 0.0, 0.0, 0.0,   // orientation: w, x, y,z
+                                          0.0, 0.0, 0.0,        // linear velocity: vx, vy, vz
+                                          0.785, 0.785, 0.785, 0.785  // servo angles: theta_0, theta_1, theta_2, theta_3
+                                          ).finished();
 
   // Initialize states x and xN and input u.
   acado_initial_state_ = hover_state.template cast<float>();
@@ -52,20 +55,22 @@ MpcWrapper<T>::MpcWrapper()
   acado_inputs_ = kHoverInput_.replicate(1, kSamples).template cast<float>();
 
   // Initialize references y and yN.
-  acado_reference_states_.block(0, 0, kStateSize, kSamples) =
-    hover_state.replicate(1, kSamples).template cast<float>();
-
-  acado_reference_states_.block(kStateSize, 0, kCostSize-kStateSize+4, kSamples) =
-    Eigen::Matrix<float, kCostSize-kStateSize+4, kSamples>::Zero();
-
+  // Set reference value for states used in cost
+  acado_reference_states_.block(0, 0, kStateSize-4, kSamples) =
+    hover_state.block(0, 0, kStateSize-4, 1).replicate(1, kSamples).template cast<float>();
+  // Set reference value for additional cost (perception) to zero
+  acado_reference_states_.block(kStateSize-4, 0, kCostSize-(kStateSize-4), kSamples) =
+    Eigen::Matrix<float, kCostSize-(kStateSize-4), kSamples>::Zero();
+  // Set reference value for inputs to hover input
   acado_reference_states_.block(kCostSize, 0, kInputSize, kSamples) =
     kHoverInput_.replicate(1, kSamples);
 
-  acado_reference_end_state_.segment(0, kStateSize) =
-    hover_state.template cast<float>();
-
-  acado_reference_end_state_.segment(kStateSize, kCostSize-kStateSize+4) =
-    Eigen::Matrix<float, kCostSize-kStateSize+4, 1>::Zero();
+  // Set reference value for states used in cost
+  acado_reference_end_state_.segment(0, kStateSize-4) =
+    hover_state.block(0, 0, kStateSize-4, 1).template cast<float>();
+  // Set reference value for additional cost (perception) to zero
+  acado_reference_end_state_.segment(kStateSize-4, kCostSize-(kStateSize-4)) =
+    Eigen::Matrix<float, kCostSize-(kStateSize-4), 1>::Zero();
 
   // Initialize Cost matrix W and WN.
   if(!(acado_W_.trace()>0.0))
@@ -138,7 +143,7 @@ bool MpcWrapper<T>::setCosts(
 // Set the input limits.
 template <typename T>
 bool MpcWrapper<T>::setLimits(T min_thrust, T max_thrust,
-    T max_rollpitchrate, T max_yawrate)
+    T max_rollpitchrate, T max_yawrate, T min_servo_angle, T max_servo_angle, T max_servo_angle_rate)
 {
   if(min_thrust <= 0.0 || min_thrust > max_thrust)
   {
@@ -164,13 +169,34 @@ bool MpcWrapper<T>::setLimits(T min_thrust, T max_thrust,
     return false;
   }
 
+  if(min_servo_angle <= -M_PI/2.0 || min_servo_angle > max_servo_angle)
+  {
+    ROS_ERROR("MPC: Minimal servo angle is not set properly, not changed.");
+    return false;
+  }
+
+  if(max_servo_angle <= 0.0 || min_servo_angle > max_servo_angle)
+  {
+    ROS_ERROR("MPC: Maximal servo angle is not set properly, not changed.");
+    return false;
+  }
+
+  if(max_servo_angle_rate <= 0.0)
+  {
+    ROS_ERROR("MPC: Maximal servo angle rate is not set properly, not changed.");
+    return false;
+  }
+
   // Set input boundaries.
-  Eigen::Matrix<T, 4, 1> lower_bounds = Eigen::Matrix<T, 4, 1>::Zero();
-  Eigen::Matrix<T, 4, 1> upper_bounds = Eigen::Matrix<T, 4, 1>::Zero();
+  // TODO adapt for foldable drone
+  Eigen::Matrix<T, 8, 1> lower_bounds = Eigen::Matrix<T, 8, 1>::Zero();
+  Eigen::Matrix<T, 8, 1> upper_bounds = Eigen::Matrix<T, 8, 1>::Zero();
   lower_bounds << min_thrust,
-    -max_rollpitchrate, -max_rollpitchrate, -max_yawrate;
+    -max_rollpitchrate, -max_rollpitchrate, -max_yawrate,
+    -max_servo_angle_rate * Eigen::Matrix<T, 4, 1>::Ones();
   upper_bounds << max_thrust,
-    max_rollpitchrate, max_rollpitchrate, max_yawrate;
+    max_rollpitchrate, max_rollpitchrate, max_yawrate,
+    max_servo_angle_rate * Eigen::Matrix<T, 4, 1>::Ones();
 
   acado_lower_bounds_ =
     lower_bounds.replicate(1, kSamples).template cast<float>();
@@ -212,6 +238,7 @@ template <typename T>
 bool MpcWrapper<T>::setReferencePose(
   const Eigen::Ref<const Eigen::Matrix<T, kStateSize, 1>> state)
 {
+  // TODO adapt for foldable drone
   acado_reference_states_.block(0, 0, kStateSize, kSamples) =
     state.replicate(1, kSamples).template cast<float>();
 
@@ -237,22 +264,27 @@ bool MpcWrapper<T>::setTrajectory(
   const Eigen::Ref<const Eigen::Matrix<T, kStateSize, kSamples+1>> states,
   const Eigen::Ref<const Eigen::Matrix<T, kInputSize, kSamples+1>> inputs)
 {
+  // TODO adapt for foldable drone
+
   Eigen::Map<Eigen::Matrix<float, kRefSize, kSamples, Eigen::ColMajor>>
     y(const_cast<float*>(acadoVariables.y));
 
   acado_reference_states_.block(0, 0, kStateSize, kSamples) =
     states.block(0, 0, kStateSize, kSamples).template cast<float>();
 
-  acado_reference_states_.block(kStateSize, 0, kCostSize-kStateSize+4, kSamples) =
-    Eigen::Matrix<float, kCostSize-kStateSize+4, kSamples>::Zero();
+  // TODO check dimensions, sets all additional cost terms (besides states => perception) to zero reference
+  acado_reference_states_.block(kStateSize, 0, kCostSize-(kStateSize-4), kSamples) =
+    Eigen::Matrix<float, kCostSize-(kStateSize-4), kSamples>::Zero();
 
+  // TODO check values for servo angle rate! Not in inputs???
   acado_reference_states_.block(kCostSize, 0, kInputSize, kSamples) =
     inputs.block(0, 0, kInputSize, kSamples).template cast<float>();
 
   acado_reference_end_state_.segment(0, kStateSize) =
     states.col(kSamples).template cast<float>();
-  acado_reference_end_state_.segment(kStateSize, kCostSize-kStateSize+4) =
-    Eigen::Matrix<float, kCostSize-kStateSize+4, 1>::Zero();
+  // TODO check dimensions, sets all additional cost terms (besides states => perception) to zero reference
+  acado_reference_end_state_.segment(kStateSize, kCostSize-(kStateSize-4)) =
+    Eigen::Matrix<float, kCostSize-(kStateSize-4), 1>::Zero();
 
   return true;
 }

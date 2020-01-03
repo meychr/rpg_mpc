@@ -51,7 +51,8 @@ MpcController<T>::MpcController(
                                          &MpcController<T>::pointOfInterestCallback, this);
   sub_autopilot_off_ = nh_.subscribe("autopilot/off", 1,
                                      &MpcController<T>::offCallback, this);
-  sub_servo_angles_ = nh_.subscribe("servo_goal_command", 1,
+  // TODO check if publishing and subscribing works, angles are updated
+  sub_servo_angles_ = nh_.subscribe("set_servo", 1,
                                          &MpcController<T>::servoAnglesCallback, this);
   pub_servo_angle_cmd_ =  nh_.advertise<foldable_drone_msgs::FoldableDroneServoAngles>("set_servo", 1);
 
@@ -191,6 +192,7 @@ bool MpcController<T>::setReference(
         reference_trajectory.points.front().heading,
         Eigen::Matrix<T, 3, 1>::UnitZ()));
     q_orientation = reference_trajectory.points.front().orientation.template cast<T>() * q_heading;
+    // TODO adapt for foldable drone, use 0.785? (for X config as equilibrium)
     reference_states_ = (Eigen::Matrix<T, kStateSize, 1>()
         << reference_trajectory.points.front().position.template cast<T>(),
         q_orientation.w(),
@@ -198,13 +200,15 @@ bool MpcController<T>::setReference(
         q_orientation.y(),
         q_orientation.z(),
         reference_trajectory.points.front().velocity.template cast<T>(),
-          0.0, 0.0, 0.0, 0.0  // servo angles
+        0.785, 0.785, 0.785, 0.785  // servo angles necessary or not?
     ).finished().replicate(1, kSamples + 1);
 
     acceleration << reference_trajectory.points.front().acceleration.template cast<T>() - gravity;
-    reference_inputs_ = (Eigen::Matrix<T, kInputSize, 1>() << acceleration.norm(),
-        reference_trajectory.points.front().bodyrates.template cast<T>(),
-          0.0, 0.0, 0.0, 0.0 // servo angle rate
+    // TODO adapt for foldable drone, use 0.0 servo angle rate
+    reference_inputs_ = (Eigen::Matrix<T, kInputSize, 1>()
+      << acceleration.norm(),
+      reference_trajectory.points.front().bodyrates.template cast<T>(),
+      0.0, 0.0, 0.0, 0.0 // servo angle rate
     ).finished().replicate(1, kSamples + 1);
   } else {
     auto iterator(reference_trajectory.points.begin());
@@ -221,21 +225,23 @@ bool MpcController<T>::setReference(
       q_heading = Eigen::Quaternion<T>(Eigen::AngleAxis<T>(
           iterator->heading, Eigen::Matrix<T, 3, 1>::UnitZ()));
       q_orientation = q_heading * iterator->orientation.template cast<T>();
+      // TODO adapt for foldable drone, use 0.785? (for X config as equilibrium)
       reference_states_.col(i) << iterator->position.template cast<T>(),
           q_orientation.w(),
           q_orientation.x(),
           q_orientation.y(),
           q_orientation.z(),
           iterator->velocity.template cast<T>(),
-            0.0, 0.0, 0.0, 0.0;
+          0.785, 0.785, 0.785, 0.785;  // servo angles
       if (reference_states_.col(i).segment(kOriW, 4).dot(
           est_state_.segment(kOriW, 4)) < 0.0)
         reference_states_.block(kOriW, i, 4, 1) =
             -reference_states_.block(kOriW, i, 4, 1);
       acceleration << iterator->acceleration.template cast<T>() - gravity;
+      // TODO adapt for foldable drone, use 0.0 servo angle rate
       reference_inputs_.col(i) << acceleration.norm(),
           iterator->bodyrates.template cast<T>(),
-            0.0, 0.0, 0.0, 0.0;
+          0.0, 0.0, 0.0, 0.0;  // servo angle rates
       quaternion_norm_ok &= abs(est_state_.segment(kOriW, 4).norm() - 1.0) < 0.1;
     }
   }
@@ -270,10 +276,14 @@ quadrotor_common::ControlCommand MpcController<T>::updateControlCommand(
   const T dt_mpc = mpc_wrapper_.getTimestep();  // in secs
   foldable_drone_msgs::FoldableDroneServoAngles servo_angle_command;
   servo_angle_command.header.stamp = time;
-  servo_angle_command.angle_servo_0 = state(STATE::kServo0) + input_bounded(INPUT::kRateServo0) * dt_mpc;
-  servo_angle_command.angle_servo_1 = state(STATE::kServo1) + input_bounded(INPUT::kRateServo1) * dt_mpc;
-  servo_angle_command.angle_servo_2 = state(STATE::kServo2) + input_bounded(INPUT::kRateServo2) * dt_mpc;
-  servo_angle_command.angle_servo_3 = state(STATE::kServo3) + input_bounded(INPUT::kRateServo3) * dt_mpc;
+  servo_angle_command.angle_servo_0 = std::max(params_.min_servo_angle_,
+                                         std::min(params_.max_servo_angle_, state(STATE::kServo0) + input_bounded(INPUT::kRateServo0) * dt_mpc));
+  servo_angle_command.angle_servo_1 = std::max(params_.min_servo_angle_,
+                                         std::min(params_.max_servo_angle_, state(STATE::kServo1) + input_bounded(INPUT::kRateServo1) * dt_mpc));
+  servo_angle_command.angle_servo_2 = std::max(params_.min_servo_angle_,
+                                         std::min(params_.max_servo_angle_, state(STATE::kServo2) + input_bounded(INPUT::kRateServo2) * dt_mpc));
+  servo_angle_command.angle_servo_3 = std::max(params_.min_servo_angle_,
+                                         std::min(params_.max_servo_angle_, state(STATE::kServo3) + input_bounded(INPUT::kRateServo3) * dt_mpc));
 
   pub_servo_angle_cmd_.publish(servo_angle_command);
 
@@ -340,7 +350,7 @@ bool MpcController<T>::setNewParams(MpcParams<T>& params) {
   mpc_wrapper_.setCosts(params.Q_, params.R_);
   mpc_wrapper_.setLimits(
       params.min_thrust_, params.max_thrust_,
-      params.max_bodyrate_xy_, params.max_bodyrate_z_);
+      params.max_bodyrate_xy_, params.max_bodyrate_z_, params.min_servo_angle_, params.max_servo_angle_, params.max_servo_angle_rate_);
   mpc_wrapper_.setCameraParameters(params.p_B_C_, params.q_B_C_);
   params.changed_ = false;
   return true;

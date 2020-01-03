@@ -72,8 +72,8 @@ int main( ){
   const double T_max = 20;        // Maximal thrust [N]
   const double theta_min = 0.0;
   const double theta_max = 1.57;  // M_PI/2
-  const double theta_dot_min = -2.0; // change per 1 sec => total change defined by dt => theta_dot_max * dt = delta_theta_max
-  const double theta_dot_max = 2.0;
+  const double theta_dot_min = -20.0; // change per 1 sec => total change defined by dt => theta_dot_max * dt = delta_theta_max
+  const double theta_dot_max = 20.0;
 
   // Bias to prevent division by zero.
   const double epsilon = 0.1;     // Camera projection recover bias [m]
@@ -144,11 +144,6 @@ int main( ){
   Q(17,17) = 0.1;   // theta_dot_1
   Q(18,18) = 0.1;   // theta_dot_2
   Q(19,19) = 0.1;   // theta_dot_3
-  // Use optionally to set desired standard config with low weights
-//  Q(20,20) = 1;   // theta_0_dot
-//  Q(21,21) = 1;   // theta_1_dot
-//  Q(22,22) = 1;   // theta_2_dot
-//  Q(23,23) = 1;   // theta_3_dot
 
   // End cost weight matrix
   DMatrix QN(hN.getDim(), hN.getDim());
@@ -166,11 +161,6 @@ int main( ){
   // Turn off perception cost => leads to overhead???
   QN(10,10) = 0;  // Cost on perception
   QN(11,11) = 0;  // Cost on perception
-  // Use optionally to set desired standard config with low weights
-//  Q(12,12) = 10;   // theta_0
-//  Q(13,13) = 10;   // theta_1
-//  Q(14,14) = 10;   // theta_2
-//  Q(15,15) = 10;   // theta_3
 
   // Set a reference for the analysis (if CODE_GEN is false).
   // Reference is at x = 2.0m in hover (qw = 1).
@@ -181,15 +171,14 @@ int main( ){
   r(3) = 1.0; // qw
   r(7) = 0.0; // vx
   r(8) = 2.5; // vy
-  r(10) = g_z;
+  r(12) = g_z;  // T
 
   DVector rN(hN.getDim());   // End cost reference
   rN.setZero();
   rN(0) = r(0); // px
   rN(3) = r(3); // py
-  r(7) = 0.0; // vx
-  r(8) = 2.5; // vy
-  r(10) = g_z;
+  rN(7) = 0.0; // vx
+  rN(8) = 2.5; // vy
 
   // DEFINE AN OPTIMAL CONTROL PROBLEM:
   // ----------------------------------
@@ -245,10 +234,10 @@ int main( ){
     ocp.subjectTo( AT_START, w_y ==  0.0 );
     ocp.subjectTo( AT_START, w_z ==  0.0 );
 
-    ocp.subjectTo( AT_START, theta_0 ==  0.0 );
-    ocp.subjectTo( AT_START, theta_1 ==  0.0 );
-    ocp.subjectTo( AT_START, theta_2 ==  0.0 );
-    ocp.subjectTo( AT_START, theta_3 ==  0.0 );
+    ocp.subjectTo( AT_START, theta_0 ==  0.785 );
+    ocp.subjectTo( AT_START, theta_1 ==  0.785 );
+    ocp.subjectTo( AT_START, theta_2 ==  0.785 );
+    ocp.subjectTo( AT_START, theta_3 ==  0.785 );
     ocp.subjectTo( AT_START, theta_dot_0 ==  0.0 );
     ocp.subjectTo( AT_START, theta_dot_1 ==  0.0 );
     ocp.subjectTo( AT_START, theta_dot_2 ==  0.0 );

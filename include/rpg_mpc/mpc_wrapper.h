@@ -63,7 +63,7 @@ class MpcWrapper
     const T state_cost_scaling = 0.0, const T input_cost_scaling = 0.0);
 
   bool setLimits(T min_thrust, T max_thrust,
-    T max_rollpitchrate, T max_yawrate);
+    T max_rollpitchrate, T max_yawrate, T min_servo_angle, T max_servo_angle, T max_servo_angle_rate);
   bool setCameraParameters(
     const Eigen::Ref<const Eigen::Matrix<T, 3, 1>>& p_B_C,
     Eigen::Quaternion<T>& q_B_C);
@@ -116,27 +116,32 @@ class MpcWrapper
   Eigen::Map<Eigen::Matrix<float, kEndRefSize, kEndRefSize>>
     acado_W_end_{acadoVariables.WN};
 
-  Eigen::Map<Eigen::Matrix<float, 4, kSamples, Eigen::ColMajor>>
+  Eigen::Map<Eigen::Matrix<float, 8, kSamples, Eigen::ColMajor>>
     acado_lower_bounds_{acadoVariables.lbValues};
 
-  Eigen::Map<Eigen::Matrix<float, 4, kSamples, Eigen::ColMajor>>
+  Eigen::Map<Eigen::Matrix<float, 8, kSamples, Eigen::ColMajor>>
     acado_upper_bounds_{acadoVariables.ubValues};
 
+  // TODO adapt for foldable drone
   Eigen::Matrix<T, kRefSize, kRefSize> W_ = (Eigen::Matrix<T, kRefSize, 1>() <<
-    10 * Eigen::Matrix<T, 3, 1>::Ones(),
-    100 * Eigen::Matrix<T, 4, 1>::Ones(),
-    10 * Eigen::Matrix<T, 3, 1>::Ones(),
-    Eigen::Matrix<T, 2, 1>::Zero(),
-    1, 10, 10, 1,
-    0.1, 0.1, 0.1, 0.1).finished().asDiagonal();
+    10 * Eigen::Matrix<T, 3, 1>::Ones(),    // position
+    100 * Eigen::Matrix<T, 4, 1>::Ones(),   // orientation (quaternion)
+    10 * Eigen::Matrix<T, 3, 1>::Ones(),    // linear velocity
+    Eigen::Matrix<T, 2, 1>::Zero(),         // perception cost
+    1, 10, 10, 1,                           // control cmds: T, wx, wy, wz
+    100000 * Eigen::Matrix<T, 4, 1>::Ones()                      // control cmds: theta_dot_0, theta_dot_1, theta_dot_2, theta_dot_3
+    ).finished().asDiagonal();
 
+  // TODO check if correct weights are copied
   Eigen::Matrix<T, kEndRefSize, kEndRefSize> WN_ =
-    W_.block(0, 0, kEndRefSize, kEndRefSize);
+    W_.block(0, 0, kEndRefSize, kEndRefSize); // copies first block (assuming that first come all states, inputs at the end!!!)
 
   bool acado_is_prepared_{false};
   const T dt_{0.1};
   const Eigen::Matrix<real_t, kInputSize, 1> kHoverInput_ =
-    (Eigen::Matrix<real_t, kInputSize, 1>() << 9.81, 0.0, 0.0, 0.0, 0.785, 0.785, 0.785, 0.785).finished();
+    (Eigen::Matrix<real_t, kInputSize, 1>() << 9.81, 0.0, 0.0, 0.0,   // T, wx, wy, wz
+                                               0.0, 0.0, 0.0, 0.0     // theta_dot_0, theta_dot_1, theta_dot_2, theta_dot_3
+                                               ).finished();
 };
 
 
