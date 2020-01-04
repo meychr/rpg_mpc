@@ -39,6 +39,7 @@ MpcController<T>::MpcController(
     // TODO adapt for foldable drone
     est_state_((Eigen::Matrix<T, kStateSize, 1>() <<
                                                   0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0.785, 0.785, 0.785, 0.785).finished()),
+    servo_angles_((Eigen::Matrix<T, 4, 1>() << 0.785, 0.785, 0.785, 0.785).finished()),
     reference_states_(Eigen::Matrix<T, kStateSize, kSamples + 1>::Zero()),
     reference_inputs_(Eigen::Matrix<T, kInputSize, kSamples + 1>::Zero()),
     predicted_states_(Eigen::Matrix<T, kStateSize, kSamples + 1>::Zero()),
