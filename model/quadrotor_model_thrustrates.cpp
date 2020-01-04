@@ -109,6 +109,7 @@ int main( ){
   h << p_x << p_y << p_z
     << q_w << q_x << q_y << q_z
     << v_x << v_y << v_z
+    << theta_0 << theta_1 << theta_2 << theta_3
     << intSx/(intSz + epsilon) << intSy/(intSz + epsilon) 
     << T << w_x << w_y << w_z
     << theta_dot_0 << theta_dot_1 << theta_dot_2 << theta_dot_3;
@@ -117,33 +118,40 @@ int main( ){
   hN << p_x << p_y << p_z
     << q_w << q_x << q_y << q_z
     << v_x << v_y << v_z
+    << theta_0 << theta_1 << theta_2 << theta_3
     << intSx/(intSz + epsilon) << intSy/(intSz + epsilon);
 
   // Running cost weight matrix
   DMatrix Q(h.getDim(), h.getDim());
   Q.setIdentity();
-  Q(0,0) = 100;   // x
-  Q(1,1) = 100;   // y
-  Q(2,2) = 100;   // z
-  Q(3,3) = 100;   // qw
-  Q(4,4) = 100;   // qx
-  Q(5,5) = 100;   // qy
-  Q(6,6) = 100;   // qz
+  Q(0,0) = 100;     // x
+  Q(1,1) = 100;     // y
+  Q(2,2) = 100;     // z
+  Q(3,3) = 100;     // qw
+  Q(4,4) = 100;     // qx
+  Q(5,5) = 100;     // qy
+  Q(6,6) = 100;     // qz
   // Increased weights for testing proxy function, otherwise final position dominates => emphasis on breaking not keeping velocity
-  Q(7,7) = 100;   // vx
-  Q(8,8) = 100;   // vy
-  Q(9,9) = 10;   // vz
+  Q(7,7) = 100;     // vx
+  Q(8,8) = 100;     // vy
+  Q(9,9) = 10;      // vz
+  // Use optionally to set desired standard config with low weights
+  Q(10,10) = 0.01;   // theta_0
+  Q(11,11) = 0.01;   // theta_1
+  Q(12,12) = 0.01;   // theta_2
+  Q(13,13) = 0.01;   // theta_3
   // Turn off perception cost => leads to overhead???
-  Q(10,10) = 0;  // Cost on perception
-  Q(11,11) = 0;  // Cost on perception
-  Q(12,12) = 1;   // T
-  Q(13,13) = 1;   // wx
-  Q(14,14) = 1;   // wy
-  Q(15,15) = 1;   // wz
-  Q(16,16) = 0.1;   // theta_dot_0
-  Q(17,17) = 0.1;   // theta_dot_1
-  Q(18,18) = 0.1;   // theta_dot_2
-  Q(19,19) = 0.1;   // theta_dot_3
+  Q(14,14) = 0;     // Cost on perception
+  Q(15,15) = 0;     // Cost on perception
+  // Control inputs
+  Q(16,16) = 1;     // T
+  Q(17,17) = 1;     // wx
+  Q(18,18) = 1;     // wy
+  Q(19,19) = 1;     // wz
+  Q(20,20) = 0.1;   // theta_dot_0
+  Q(21,21) = 0.1;   // theta_dot_1
+  Q(22,22) = 0.1;   // theta_dot_2
+  Q(23,23) = 0.1;   // theta_dot_3
 
   // End cost weight matrix
   DMatrix QN(hN.getDim(), hN.getDim());
@@ -158,9 +166,14 @@ int main( ){
   QN(7,7) = Q(7,7);   // vx
   QN(8,8) = Q(8,8);   // vy
   QN(9,9) = Q(9,9);   // vz
+  // Use optionally to set desired standard config with low weights
+  QN(10,10) = Q(10,10);   // theta_0
+  QN(11,11) = Q(11,11);   // theta_1
+  QN(12,12) = Q(12,12);   // theta_2
+  QN(13,13) = Q(13,13);   // theta_3
   // Turn off perception cost => leads to overhead???
-  QN(10,10) = 0;  // Cost on perception
-  QN(11,11) = 0;  // Cost on perception
+  QN(14,14) = Q(14,14);  // Cost on perception
+  QN(15,15) = Q(15,15);  // Cost on perception
 
   // Set a reference for the analysis (if CODE_GEN is false).
   // Reference is at x = 2.0m in hover (qw = 1).
@@ -171,14 +184,23 @@ int main( ){
   r(3) = 1.0; // qw
   r(7) = 0.0; // vx
   r(8) = 2.5; // vy
-  r(12) = g_z;  // T
+  r(10) = 0.785; // theta_0
+  r(11) = 0.785; // theta_1
+  r(12) = 0.785; // theta_2
+  r(13) = 0.785; // theta_3
+  r(16) = g_z;  // T
 
   DVector rN(hN.getDim());   // End cost reference
   rN.setZero();
   rN(0) = r(0); // px
-  rN(3) = r(3); // py
-  rN(7) = 0.0; // vx
-  rN(8) = 2.5; // vy
+  rN(1) = r(1); // py
+  rN(3) = r(3); // qw
+  rN(7) = r(7); // vx
+  rN(8) = r(8); // vy
+  rN(10) = r(10); // theta_0
+  rN(11) = r(11); // theta_1
+  rN(12) = r(12); // theta_2
+  rN(13) = r(13); // theta_3
 
   // DEFINE AN OPTIMAL CONTROL PROBLEM:
   // ----------------------------------

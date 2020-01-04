@@ -36,7 +36,7 @@ MpcController<T>::MpcController(
     mpc_wrapper_(MpcWrapper<T>()),
     timing_feedback_(T(1e-3)),
     timing_preparation_(T(1e-3)),
-    // TODO check if correct for servo angles
+    // TODO adapt for foldable drone
     est_state_((Eigen::Matrix<T, kStateSize, 1>() <<
                                                   0, 0, 0, 1, 0, 0, 0, 0, 0, 0, 0.785, 0.785, 0.785, 0.785).finished()),
     reference_states_(Eigen::Matrix<T, kStateSize, kSamples + 1>::Zero()),
@@ -51,7 +51,10 @@ MpcController<T>::MpcController(
                                          &MpcController<T>::pointOfInterestCallback, this);
   sub_autopilot_off_ = nh_.subscribe("autopilot/off", 1,
                                      &MpcController<T>::offCallback, this);
-  // TODO check if publishing and subscribing works, angles are updated
+  // TODO check if better solution for publishing and subscribing
+  // to get correct state estimate of servo angles: foldable_drone_feedback
+  // but does not work good with control command update => problem with velocity vs position control!
+  // see updateControlCommand()
   sub_servo_angles_ = nh_.subscribe("set_servo", 1,
                                          &MpcController<T>::servoAnglesCallback, this);
   pub_servo_angle_cmd_ =  nh_.advertise<foldable_drone_msgs::FoldableDroneServoAngles>("set_servo", 1);

@@ -34,7 +34,7 @@ namespace rpg_mpc {
 
 static constexpr int kSamples = ACADO_N;      // number of samples
 static constexpr int kStateSize = ACADO_NX;   // number of states
-static constexpr int kStateNotUsedForCostSize = 4;    // number of states not added to costs
+static constexpr int kStateNotUsedForCostSize = 0;    // number of states not added to costs
 static constexpr int kRefSize = ACADO_NY;     // number of reference states
 static constexpr int kEndRefSize = ACADO_NYN; // number of end reference states
 static constexpr int kInputSize = ACADO_NU;   // number of inputs
