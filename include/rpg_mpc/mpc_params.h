@@ -47,7 +47,6 @@ class MpcParams {
     max_bodyrate_z_(0.0),
     min_thrust_(0.0),
     max_thrust_(0.0),
-    // TODO add to loadParameters()
     max_servo_angle_rate_(0.0),
     min_servo_angle_(-M_PI),
     max_servo_angle_(-M_PI),
