@@ -80,8 +80,8 @@ int main( ){
 
   // Proxy function for mlp compensation => optimization exploits it to brake as well!!!
   const double k_aero = 0.1;
-  IntermediateState resistance_x = v_x * k_aero * ((1.57 - theta_1) + theta_2 + theta_0 + (1.57 - theta_3));
-  IntermediateState resistance_y = v_y * k_aero * (theta_1 + (1.57 - theta_2) + (1.57 - theta_0) + theta_3);
+  IntermediateState resistance_x = v_x * k_aero * (theta_0 + (1.57 - theta_1) + theta_2 + (1.57 - theta_3));
+  IntermediateState resistance_y = v_y * k_aero * ((1.57 - theta_0) + theta_1 + (1.57 - theta_2) + theta_3);
 
   // System Dynamics
   f << dot(p_x) ==  v_x;
