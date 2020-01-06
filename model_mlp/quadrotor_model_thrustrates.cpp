@@ -26,13 +26,50 @@
 #include <acado_optimal_control.hpp>
 #include <acado_code_generation.hpp>
 #include <acado_gnuplot.hpp>
+#include <acado_toolkit.hpp>
+#include <acado/utils/acado_utils.hpp>
+#include <acado/matrix_vector/matrix_vector.hpp>
+#include <acado/matrix_vector/vector.hpp>
+#include <acado/user_interaction/user_interaction.hpp>
+#include <acado/symbolic_expression/symbolic_expression.hpp>
+#include <acado/function/function.hpp>
+
+// Use Acado
+USING_NAMESPACE_ACADO
+
+
+// Custom functions
+
+IntermediateState dotDivide( IntermediateState x , IntermediateState y ){
+  /*  Implementation of element-wise division of two vectors   */
+
+  IntermediateState result(x.getDim());
+  int i;
+  for(i = 0; i < x.getDim(); i++){
+    result(i) = x(i) / y(i);
+  }
+  return result;
+
+}
+
+IntermediateState tanh( IntermediateState x ){
+  /*  This is the hyperbolic tangent function. Most activation functions are not
+      implemented in ACADO, so you must define them as INTERMEDIATE STATES.   */
+
+  DMatrix I( x.getNumRows(), x.getNumCols());
+  I.setAll(1);    //this is apparently the only way to sum a constant value element-wise.
+  IntermediateState numTanh=(I-exp(-2*x));
+  IntermediateState denTanh=(I+exp(-2*x));
+
+  return dotDivide(numTanh,denTanh);
+
+}
 
 // Standalone code generation for a parameter-free quadrotor model
 // with thrust and rates input.
 
 int main( ){
-  // Use Acado
-  USING_NAMESPACE_ACADO
+
 
   /*
   Switch between code generation and analysis.
@@ -82,27 +119,132 @@ int main( ){
   const double k_aero = 0.1;
 
   //Load the net parameters (weights, bias) from file.
-  DMatrix W1; W1.read( "W_theta.txt" );
-  DMatrix B1; B1.read( "B_theta.txt" );
-  DMatrix Mean; Mean.read( "Mean.txt" );
-  DMatrix StdDev; StdDev.read( "StdDev.txt" );
+  DMatrix W_theta; W_theta.read( "W_theta.txt" );
+  DMatrix B_theta; B_theta.read( "B_theta.txt" );
 
-  std::cout << W1 << std::endl;
-  std::cout << B1 << std::endl;
+  std::cout << W_theta << std::endl;
+  std::cout << B_theta << std::endl;
 
-  // MLP network
-  IntermediateState features(4); // network input
-  IntermediateState labels(2);   // network output
-  features(0) = theta_0;
-  features(1) = theta_1;
-  features(2) = theta_2;
-  features(3) = theta_3;
+  DMatrix W1; W1.read( "mlp_params/weight_1.txt" );
+  DMatrix B1; B1.read( "mlp_params/bias_1.txt" );
+  DMatrix W2; W2.read( "mlp_params/weight_2.txt" );
+  DMatrix B2; B2.read( "mlp_params/bias_2.txt" );
+  DMatrix W3; W3.read( "mlp_params/weight_3.txt" );
+  DMatrix B3; B3.read( "mlp_params/bias_3.txt" );
+  std::cout << "Dimensions of parameter matrices (rows x cols)" << std::endl;
+  std::cout << "W1: " << W1.getNumRows() << " x " << W1.getNumCols() << std::endl;
+  std::cout << "B1: " << B1.getNumRows() << " x " << B1.getNumCols() << std::endl;
+  std::cout << "W2: " << W2.getNumRows() << " x " << W2.getNumCols() << std::endl;
+  std::cout << "B2: " << B2.getNumRows() << " x " << B2.getNumCols() << std::endl;
+  std::cout << "W3: " << W3.getNumRows() << " x " << W3.getNumCols() << std::endl;
+  std::cout << "B3: " << B3.getNumRows() << " x " << B3.getNumCols() << std::endl;
 
-  // The MLP expression
-  //  IntermediateState resistance_x =  (theta_0 + (1.57 - theta_1) + theta_2 + (1.57 - theta_3));
-  //  IntermediateState resistance_y =  ((1.57 - theta_0) + theta_1 + (1.57 - theta_2) + theta_3);
-  labels = k_aero * (W1*features + B1) ;
+  DMatrix mean_features; mean_features.read( "mlp_params/mean_features.txt" );
+  DMatrix std_features; std_features.read( "mlp_params/std_features.txt" );
+  DMatrix W_one_over_std_features; W_one_over_std_features.read( "mlp_params/one_over_std_features_matrix.txt" );
+  DMatrix mean_labels; mean_labels.read( "mlp_params/mean_labels.txt" );
+  DMatrix std_labels; std_labels.read( "mlp_params/std_labels.txt" );
+  DMatrix std_labels_matrix; std_labels_matrix.read( "mlp_params/std_labels_matrix.txt" );
+/*
+  DMatrix features(18,1);
+ features(0,0) = 0;
+ features(1,0) = 0;
+ features(2,0) = 0;
+ features(3,0) = 1;
+ features(4,0) = 1;
+ features(5,0) = 1;
+ features(6,0) = 0;
+ features(7,0) = 0;
+ features(8,0) = 0;
+ features(9,0) = 0; // get rid of this term in the training/mlp!
+ features(10,0) = 0.785;
+ features(11,0) = 0.785;
+ features(12,0) = 0.785;
+ features(13,0) = 0.785;
+ features(14,0) = 0;
+ features(15,0) = 0;
+ features(16,0) = 0;
+ features(17,0) = 9.81;
+  std::cout << features << std::endl;
+*/
 
+
+/*
+ // Normalize features
+ DMatrix features_normalized = W_one_over_std_features * (features - mean_features);
+  DMatrix feat = features_normalized;
+
+  // MLP
+  DMatrix labels_normalized = (B3 + W3*(B2 + W2*(B1 + W1*feat)));
+ // Denormalize labels
+  DMatrix labels = std_labels_matrix * labels_normalized + mean_labels;
+ std::cout << "Normalized features: " << std::endl;
+ std::cout << features_normalized << std::endl;
+ std::cout << "Normalized labels: " << std::endl;
+ std::cout << labels_normalized << std::endl;
+ std::cout << "Denormalized features: " << std::endl;
+ std::cout << labels << std::endl;
+*/
+  IntermediateState features(18);
+  features(0) = q_x;
+  features(1) = q_y;
+  features(2) = q_z;
+  features(3) = q_w;
+  features(4) = v_x;
+  features(5) = v_y;
+  features(6) = v_z;
+  features(7) = w_x;
+  features(8) = w_y;
+  features(9) = w_z; // get rid of this term in the training/mlp!
+  features(10) = theta_0;
+  features(11) = theta_1;
+  features(12) = theta_2;
+  features(13) = theta_3;
+  features(14) = w_x;
+  features(15) = w_y;
+  features(16) = w_z;
+  features(17) = T;
+
+  // Normalize features
+  IntermediateState features_normalized = W_one_over_std_features * (features - mean_features);
+  IntermediateState feat = features_normalized;
+  // MLP
+  IntermediateState labels_normalized = tanh(B3 + W3*tanh(B2 + W2*tanh(B1 + W1*feat)));
+  // Denormalize labels
+  IntermediateState labels = std_labels_matrix * labels_normalized + mean_labels;
+
+
+  /*IntermediateState features(18);
+  features(0) = q_x;
+  features(1) = q_y;
+  features(2) = q_z;
+  features(3) = q_w;
+  features(4) = v_x;
+  features(5) = v_y;
+  features(6) = v_z;
+  features(7) = w_x;
+  features(8) = w_y;
+  features(9) = w_z; // get rid of this term in the training/mlp!
+  features(10) = theta_0;
+  features(11) = theta_1;
+  features(12) = theta_2;
+  features(13) = theta_3;
+  features(14) = w_x;
+  features(15) = w_y;
+  features(16) = w_z;
+  features(17) = T;
+/*
+  // Normalize features
+  DMatrix features_normalized = W_one_over_std_features * (features - mean_features);
+  // MLP
+  DMatrix labels_normalized = tanh(B3 + W3*tanh(B2 + W2*tanh(B1 + W1*features_normalized)));
+  // Denormalize labels
+  DMatrix labels = std_labels_matrix * labels_normalized + mean_labels;
+  std::cout << features_normalized << std::endl;
+  std::cout << labels_normalized << std::endl;
+  std::cout << labels << std::endl;
+
+*/
   // System Dynamics
   f << dot(p_x) ==  v_x;
   f << dot(p_y) ==  v_y;
@@ -111,8 +253,8 @@ int main( ){
   f << dot(q_x) ==  0.5 * ( w_x * q_w + w_z * q_y - w_y * q_z);
   f << dot(q_y) ==  0.5 * ( w_y * q_w - w_z * q_x + w_x * q_z);
   f << dot(q_z) ==  0.5 * ( w_z * q_w + w_y * q_x - w_x * q_y);
-  f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T - v_x * labels(0);
-  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T - v_y * labels(1);
+  f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T - labels(0);
+  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T;
   f << dot(v_z) ==  ( 1 - 2 * q_x * q_x - 2 * q_y * q_y ) * T - g_z;
   f << dot(theta_0) == theta_dot_0;
   f << dot(theta_1) == theta_dot_1;
@@ -161,8 +303,8 @@ int main( ){
   Q(12,12) = 0.01;   // theta_2
   Q(13,13) = 0.01;   // theta_3
   // Turn off perception cost => leads to overhead???
-  Q(14,14) = 0;     // Cost on perception
-  Q(15,15) = 0;     // Cost on perception
+  Q(14,14) = 0.000001;     // Cost on perception
+  Q(15,15) = 0.000001;     // Cost on perception
   // Control inputs
   Q(16,16) = 1;     // T
   Q(17,17) = 1;     // wx
@@ -320,6 +462,7 @@ int main( ){
     GnuplotWindow window5( PLOT_AT_END );
     window5.addSubplot( labels(0),"res x mlp" );
     window5.addSubplot( labels(1),"res y mlp" );
+    window5.addSubplot( labels(2),"res y mlp" );
 
     // Define an algorithm to solve it.
     OptimizationAlgorithm algorithm(ocp);

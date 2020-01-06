@@ -45,7 +45,7 @@ int main( ){
   If CODE_GEN is false, the system is compiled into a standalone optimization
   and solved on execution. The reference and constraints must be set in here.
   */
-  const bool CODE_GEN = true;
+  const bool CODE_GEN = false;
 
   // System variables
   DifferentialState     p_x, p_y, p_z;
