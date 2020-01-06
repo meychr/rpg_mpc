@@ -206,13 +206,15 @@ int main( ){
   features(17) = T;
 
   // Normalize features
-  IntermediateState features_normalized = W_one_over_std_features * (features - mean_features);
-  IntermediateState feat = features_normalized;
+  //IntermediateState features_normalized = W_one_over_std_features * (features - mean_features);
+  //IntermediateState feat = features_normalized;
   // MLP
-  IntermediateState labels_normalized = tanh(B3 + W3*tanh(B2 + W2*tanh(B1 + W1*feat)));
+  //IntermediateState labels_normalized = (B3 + W3*(B2 + W2*(B1 + W1*features)));
   // Denormalize labels
-  IntermediateState labels = std_labels_matrix * labels_normalized + mean_labels;
+  //IntermediateState labels = std_labels_matrix * labels_normalized + mean_labels;
 
+  // Test possibilities
+  IntermediateState labels = W3*tanh(W1*tanh(features));
 
   /*IntermediateState features(18);
   features(0) = q_x;
@@ -254,8 +256,8 @@ int main( ){
   f << dot(q_y) ==  0.5 * ( w_y * q_w - w_z * q_x + w_x * q_z);
   f << dot(q_z) ==  0.5 * ( w_z * q_w + w_y * q_x - w_x * q_y);
   f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T - labels(0);
-  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T;
-  f << dot(v_z) ==  ( 1 - 2 * q_x * q_x - 2 * q_y * q_y ) * T - g_z;
+  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T - labels(1);
+  f << dot(v_z) ==  ( 1 - 2 * q_x * q_x - 2 * q_y * q_y ) * T - g_z ;
   f << dot(theta_0) == theta_dot_0;
   f << dot(theta_1) == theta_dot_1;
   f << dot(theta_2) == theta_dot_2;
@@ -272,7 +274,7 @@ int main( ){
     << q_w << q_x << q_y << q_z
     << v_x << v_y << v_z
     << theta_0 << theta_1 << theta_2 << theta_3
-    << intSx/(intSz + epsilon) << intSy/(intSz + epsilon) 
+    << intSx/(intSz + epsilon) << intSy/(intSz + epsilon)
     << T << w_x << w_y << w_z
     << theta_dot_0 << theta_dot_1 << theta_dot_2 << theta_dot_3;
 
@@ -459,10 +461,10 @@ int main( ){
     window4.addSubplot( theta_dot_2,"theta dot 2" );
     window4.addSubplot( theta_dot_3,"theta dot 3" );
 
-    GnuplotWindow window5( PLOT_AT_END );
+   /* GnuplotWindow window5( PLOT_AT_END );
     window5.addSubplot( labels(0),"res x mlp" );
     window5.addSubplot( labels(1),"res y mlp" );
-    window5.addSubplot( labels(2),"res y mlp" );
+    window5.addSubplot( labels(2),"res y mlp" );*/
 
     // Define an algorithm to solve it.
     OptimizationAlgorithm algorithm(ocp);
@@ -471,7 +473,7 @@ int main( ){
 
     // Not possible to use more than two windows???
     //algorithm << window1;
-    algorithm << window5;
+    //algorithm << window5;
 
     algorithm.solve();
 
