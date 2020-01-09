@@ -45,15 +45,15 @@ int main( ){
   If CODE_GEN is false, the system is compiled into a standalone optimization
   and solved on execution. The reference and constraints must be set in here.
   */
-  const bool CODE_GEN = false;
+  const bool CODE_GEN = true;
 
   // System variables
-  DifferentialState     p_x, p_y, p_z;
-  DifferentialState     q_w, q_x, q_y, q_z;
-  DifferentialState     v_x, v_y, v_z;
-  DifferentialState     theta_0, theta_1, theta_2, theta_3;         // rotor arm servo angles
-  Control               T, w_x, w_y, w_z;
-  Control               theta_dot_0, theta_dot_1, theta_dot_2, theta_dot_3;
+  DifferentialState     p_x, p_y, p_z;                                       // position (world)
+  DifferentialState     q_w, q_x, q_y, q_z;                                  // orientation (world)
+  DifferentialState     v_x, v_y, v_z;                                       // linear velocity (world)
+  DifferentialState     theta_0, theta_1, theta_2, theta_3;                  // servo angles
+  Control               T, w_x, w_y, w_z;                                    // thrust (body), body rates (world)
+  Control               theta_dot_0, theta_dot_1, theta_dot_2, theta_dot_3;  // servo angle rates
   DifferentialEquation  f;
   Function              h, hN;
   OnlineData            p_F_x, p_F_y, p_F_z;
@@ -78,10 +78,22 @@ int main( ){
   // Bias to prevent division by zero.
   const double epsilon = 0.1;     // Camera projection recover bias [m]
 
-  // Proxy function for mlp compensation => optimization exploits it to brake as well!!!
-  const double k_aero = 0.1;
-  IntermediateState resistance_x = v_x * k_aero * (theta_0 + (1.57 - theta_1) + theta_2 + (1.57 - theta_3));
-  IntermediateState resistance_y = v_y * k_aero * ((1.57 - theta_0) + theta_1 + (1.57 - theta_2) + theta_3);
+  // Aerodynamics model
+  //Load the net parameters (weights, bias) from file.
+  DMatrix W1; W1.read( "mlp_params/weight_1.txt" );
+  DMatrix B1; B1.read( "mlp_params/bias_1.txt" );
+//  std::cout << "Dimensions of parameter matrices (rows x cols)" << std::endl;
+//  std::cout << "W1: " << W1.getNumRows() << " x " << W1.getNumCols() << std::endl;
+//  std::cout << "B1: " << B1.getNumRows() << " x " << B1.getNumCols() << std::endl;
+
+  IntermediateState features(4);
+  features(0) = theta_0;
+  features(1) = theta_1;
+  features(2) = theta_2;
+  features(3) = theta_3;
+
+  // Test possibilities
+  IntermediateState compensation = B1 + W1*features;
 
   // System Dynamics
   f << dot(p_x) ==  v_x;
@@ -91,8 +103,8 @@ int main( ){
   f << dot(q_x) ==  0.5 * ( w_x * q_w + w_z * q_y - w_y * q_z);
   f << dot(q_y) ==  0.5 * ( w_y * q_w - w_z * q_x + w_x * q_z);
   f << dot(q_z) ==  0.5 * ( w_z * q_w + w_y * q_x - w_x * q_y);
-  f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T - resistance_x;
-  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T - resistance_y;
+  f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T - compensation(0)*v_x; // rotation from world to body and back missing
+  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T - compensation(1)*v_y; // rotation from world to body and back missing
   f << dot(v_z) ==  ( 1 - 2 * q_x * q_x - 2 * q_y * q_y ) * T - g_z;
   f << dot(theta_0) == theta_dot_0;
   f << dot(theta_1) == theta_dot_1;
@@ -183,7 +195,7 @@ int main( ){
   r(1) = 2.0; // py
   r(3) = 1.0; // qw
   r(7) = 0.0; // vx
-  r(8) = 2.5; // vy
+  r(8) = 2.0; // vy
   r(10) = 0.785; // theta_0
   r(11) = 0.785; // theta_1
   r(12) = 0.785; // theta_2
@@ -278,6 +290,10 @@ int main( ){
     window1.addSubplot( theta_1 * 180.0 / 3.141,"theta 1" );
     window1.addSubplot( theta_2 * 180.0 / 3.141,"theta 2" );
     window1.addSubplot( theta_3 * 180.0 / 3.141,"theta 3" );
+    window1.addSubplot( compensation(0),"res x mlp" );
+    window1.addSubplot( compensation(1),"res y mlp" );
+    window1.addSubplot( compensation(2),"res z mlp" );
+
 
     GnuplotWindow window2( PLOT_AT_END);
     window2.addSubplot( w_x,"rotation-acc x" );
@@ -297,14 +313,25 @@ int main( ){
     window4.addSubplot( theta_dot_2,"theta dot 2" );
     window4.addSubplot( theta_dot_3,"theta dot 3" );
 
+   GnuplotWindow window5( PLOT_AT_END );
+    window5.addSubplot( compensation(0),"res x mlp" );
+    window5.addSubplot( compensation(1),"res y mlp" );
+    window5.addSubplot( compensation(2),"res z mlp" );
+    window5.addSubplot( theta_0 * 180.0 / 3.141,"theta 0" );
+    window5.addSubplot( theta_1 * 180.0 / 3.141,"theta 1" );
+    window5.addSubplot( theta_2 * 180.0 / 3.141,"theta 2" );
+    window5.addSubplot( theta_3 * 180.0 / 3.141,"theta 3" );
+    window5.addSubplot( v_x,"velocity x" );
+    window5.addSubplot( v_y,"velocity y" );
+
     // Define an algorithm to solve it.
     OptimizationAlgorithm algorithm(ocp);
     algorithm.set( INTEGRATOR_TOLERANCE, 1e-6 );
     algorithm.set( KKT_TOLERANCE, 1e-3 );
 
     // Not possible to use more than two windows???
-    algorithm << window1;
-    //algorithm << window4;
+    //algorithm << window1;
+    algorithm << window5;
 
     algorithm.solve();
 
