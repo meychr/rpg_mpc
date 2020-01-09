@@ -181,8 +181,8 @@ real_t ubAValues[ 80 ];
  */
 typedef struct ACADOworkspace_
 {
-/** Column vector of size: 22 */
-real_t rhs_aux[ 22 ];
+/** Column vector of size: 387 */
+real_t rhs_aux[ 387 ];
 
 /** Column vector of size: 280 */
 real_t d[ 280 ];

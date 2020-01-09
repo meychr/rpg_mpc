@@ -92,8 +92,27 @@ int main( ){
   features(2) = theta_2;
   features(3) = theta_3;
 
-  // Test possibilities
-  IntermediateState compensation = B1 + W1*features;
+  // SLP equation
+  IntermediateState rot_mat(3,3);
+  rot_mat(0,0)  = 1 - 2 * (q_y*q_y - q_z*q_z);
+  rot_mat(0,1)  = 2 * (q_x*q_y - q_w*q_z);
+  rot_mat(0,2)  = 2 * (q_w*q_y + q_x*q_z);
+  rot_mat(1,0)  = 2 * (q_x*q_y + q_w*q_z);
+  rot_mat(1,1)  = 1 - 2 * (q_x*q_x + q_z*q_z);
+  rot_mat(1,2)  = 2 * (q_y*q_z - q_w*q_x);
+  rot_mat(2,0)  = 2 * (q_x*q_z - q_w*q_y);
+  rot_mat(2,1)  = 2 * (q_w*q_x + q_y*q_z);
+  rot_mat(2,2)  = 1 - 2 * (q_x*q_x + q_y*q_y);
+
+  IntermediateState slp_output = B1 + W1*features;
+  IntermediateState compensation_matrix(3,3);
+  compensation_matrix(0,0) = slp_output(0);
+  compensation_matrix(1,1) = slp_output(1);
+  IntermediateState v(3);
+  v(0) = v_x; v(1) = v_y; v(2) = v_z;
+  // Leads to breaking behaviour???
+  IntermediateState compensation =  rot_mat * compensation_matrix * rot_mat.transpose() * v;
+  //IntermediateState compensation =  compensation_matrix * v;
 
   // System Dynamics
   f << dot(p_x) ==  v_x;
@@ -103,9 +122,9 @@ int main( ){
   f << dot(q_x) ==  0.5 * ( w_x * q_w + w_z * q_y - w_y * q_z);
   f << dot(q_y) ==  0.5 * ( w_y * q_w - w_z * q_x + w_x * q_z);
   f << dot(q_z) ==  0.5 * ( w_z * q_w + w_y * q_x - w_x * q_y);
-  f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T - compensation(0)*v_x; // rotation from world to body and back missing
-  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T - compensation(1)*v_y; // rotation from world to body and back missing
-  f << dot(v_z) ==  ( 1 - 2 * q_x * q_x - 2 * q_y * q_y ) * T - g_z;
+  f << dot(v_x) ==  2 * ( q_w * q_y + q_x * q_z ) * T - compensation(0);
+  f << dot(v_y) ==  2 * ( q_y * q_z - q_w * q_x ) * T - compensation(1);
+  f << dot(v_z) ==  ( 1 - 2 * q_x * q_x - 2 * q_y * q_y ) * T - g_z - compensation(2);
   f << dot(theta_0) == theta_dot_0;
   f << dot(theta_1) == theta_dot_1;
   f << dot(theta_2) == theta_dot_2;
