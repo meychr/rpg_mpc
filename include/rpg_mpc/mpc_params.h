@@ -210,6 +210,11 @@ class MpcParams {
 
   Eigen::Matrix<T, kCostSize, kCostSize> Q_;
   Eigen::Matrix<T, kInputSize, kInputSize> R_;
+
+  bool perform_compensation = false;
+  T mlp_compensation_x_{0.0};
+  T mlp_compensation_y_{0.0};
+  T mlp_compensation_z_{0.0};
 };
 
 
