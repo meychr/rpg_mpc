@@ -80,8 +80,8 @@ int main( ){
 
   // Aerodynamics model
   //Load the net parameters (weights, bias) from file.
-  DMatrix W1; W1.read( "mlp_params/weight_1.txt" );
-  DMatrix B1; B1.read( "mlp_params/bias_1.txt" );
+  DMatrix W1; W1.read( "mlp_params/original/weight_1.txt" );
+  DMatrix B1; B1.read( "mlp_params/original/bias_1.txt" );
 //  std::cout << "Dimensions of parameter matrices (rows x cols)" << std::endl;
 //  std::cout << "W1: " << W1.getNumRows() << " x " << W1.getNumCols() << std::endl;
 //  std::cout << "B1: " << B1.getNumRows() << " x " << B1.getNumCols() << std::endl;
