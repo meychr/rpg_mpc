@@ -82,6 +82,8 @@ int main( ){
   //Load the net parameters (weights, bias) from file.
   DMatrix W1; W1.read( "mlp_params/original/weight_1.txt" );
   DMatrix B1; B1.read( "mlp_params/original/bias_1.txt" );
+//  DMatrix W1; W1.read( "mlp_params/zero/weight_1.txt" );
+//  DMatrix B1; B1.read( "mlp_params/zero/bias_1.txt" );
 //  std::cout << "Dimensions of parameter matrices (rows x cols)" << std::endl;
 //  std::cout << "W1: " << W1.getNumRows() << " x " << W1.getNumCols() << std::endl;
 //  std::cout << "B1: " << B1.getNumRows() << " x " << B1.getNumCols() << std::endl;
@@ -110,9 +112,8 @@ int main( ){
   compensation_matrix(1,1) = slp_output(1);
   IntermediateState v(3);
   v(0) = v_x; v(1) = v_y; v(2) = v_z;
-  // Leads to breaking behaviour???
+  // Handle transformation between body and world frame (v: world, compensation_matrix: body, compensation: world)
   IntermediateState compensation =  rot_mat * compensation_matrix * rot_mat.transpose() * v;
-  //IntermediateState compensation =  compensation_matrix * v;
 
   // System Dynamics
   f << dot(p_x) ==  v_x;
