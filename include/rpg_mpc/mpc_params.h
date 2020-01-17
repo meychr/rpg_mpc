@@ -53,7 +53,11 @@ class MpcParams {
     p_B_C_(Eigen::Matrix<T, 3, 1>::Zero()),
     q_B_C_(Eigen::Quaternion<T>(1.0, 0.0, 0.0, 0.0)),
     Q_(Eigen::Matrix<T, kCostSize, kCostSize>::Zero()),
-    R_(Eigen::Matrix<T, kInputSize, kInputSize>::Zero())
+    R_(Eigen::Matrix<T, kInputSize, kInputSize>::Zero()),
+    perform_learned_compensation(false),
+    learned_compensation_x(0.0),
+    learned_compensation_y(0.0),
+    learned_compensation_z(0.0)
   {
   }
 
@@ -211,10 +215,10 @@ class MpcParams {
   Eigen::Matrix<T, kCostSize, kCostSize> Q_;
   Eigen::Matrix<T, kInputSize, kInputSize> R_;
 
-  bool perform_compensation = false;
-  T mlp_compensation_x_{0.0};
-  T mlp_compensation_y_{0.0};
-  T mlp_compensation_z_{0.0};
+  bool perform_learned_compensation;
+  T learned_compensation_x;
+  T learned_compensation_y;
+  T learned_compensation_z;
 };
 
 
